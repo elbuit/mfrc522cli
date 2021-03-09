@@ -1,5 +1,5 @@
 # mfrc522cli
-A generic serial cli interface for writing mifare classic cards usind an arduino/ESP and a mfrc522 module
+A generic serial cli interface for writing mifare classic cards usind an ESP8266 and a mfrc522 module
 ![](mfrc522_cli_bb.png)
 ## This is a cli serial interface for mfrc522
   It allows to copy, modify or clone cards using a serial interface commands.
