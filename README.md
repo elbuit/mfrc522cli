@@ -85,14 +85,15 @@ example:
     clear data  -  clear readed or loaded data stored in buffer
     clear keys  -  clear all loaded keys to FFFFFFFFFFFF
 ```
-Command: fix [card] (stop)
+### Command: fix start stop
 description: This command allows to fix a unresponsive magic card.
 This not work with common cards only with magic cards.
 Usage:
 ```
   fix start
 ```
+then approach the card to reader
 ```
   fix stop
 ```
- 
+if fix doesn't work,this stops trying to fix a card.
