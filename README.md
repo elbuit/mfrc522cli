@@ -1,11 +1,11 @@
 # mfrc522cli
-A generic serial cli interface for writing mifare classic cards usind an ESP8266 and a mfrc522 module
+A generic serial cli interface for writing mifare classic cards using an ESP8266 and a mfrc522 module
 ![](mfrc522_cli_bb.png)
 ## This is a cli serial interface for mfrc522
   It allows to copy, modify or clone cards using a serial interface commands.
   It also allows to write block zero 
    
-Commands: read, lka, show, lb, clean
+Commands: read, write, lka, show, lb, clean, fix
   
   ### command: lka (sector) (key)
 description: load key A for a sector. This key will be used in read or write card commands.
@@ -35,42 +35,26 @@ example:
 ```
   reads a entire card and store data to write buffer except trailer sectors blocks
 
- ### command: write (zero) (trailer)
-writes data in the buffer to the card. To see what data is going to be written "show write"
-NOTE: If you want to clone a entire card, block zero included, you need to do this in two spteps.
-first copy block zero: load block and key for block zero and then write it.
+ ### command: write (zero) (trailer) (card)
+writes data buffer to the card. To see what data is going to be written "show write"
 
-```
-lka 0 ffffffffffff
-lb 0 CAD9BF802C0804006263646566676869
-write zero
-```
-then read card and write
-```
-read card
-write
-```
-This won't copy trailer blocks, if you want to copy trailer blocks load them and write trailer:
+write card: write data from internal buffer to card. By default this doesn't copy trailer blocks to destination card.
+
+write zero: enables writing the zero block in magic cards.
+
+write trailer: Enable writing trailer blocks.
 
 
-```
-lka 0 ffffffffffff
-lb 3 ffffffffffffFF078069FFFFFFFFFFFF
-lb 7 ffffffffffffFF078069FFFFFFFFFFFF
-lb 11 ffffffffffffFF078069FFFFFFFFFFFF
-lb 15 ffffffffffffFF078069FFFFFFFFFFFF
-[...]
-write trailer
-```
-
-IMPORTANT: When you write a trailer block you are writing a new Key A and Key B.
-
-
+DANGEROUS: When you write a trailer block you are writing a new Key A and Key B and permissions
 
 ### command: show [write] [keys] [uid]
-description: show data
-parameter: write - show blocks to write (all blocks if read command or several if lb command)
+description: show 
+
+parameter: write - show blocks to write (all blocks if 
+read command or several if lb command)
+
 parameter: keys  - show loaded keys for read or write commands
+
 parameter: uid   - show uid card (needed to aproach it to the reader)
 example:
 ```
@@ -85,8 +69,11 @@ example:
     clear data  -  clear readed or loaded data stored in buffer
     clear keys  -  clear all loaded keys to FFFFFFFFFFFF
 ```
+
 ### Command: fix start stop
+
 description: This command allows to fix a unresponsive magic card.
+
 This not work with common cards only with magic cards.
 Usage:
 ```
@@ -97,3 +84,65 @@ then approach the card to reader
   fix stop
 ```
 if fix doesn't work,this stops trying to fix a card.
+
+
+## Examples:
+
+### Write block 4 of a card:
+```
+clear // clear data en keys buffer
+lb 4 fffebbccaabbcc112233445566aa1124
+lka 1 7d8037235cff // block 4 belongs to sector 1
+```
+```
+# show keys
+> show
+FFFFFFFFFFFF
+7D8037235CFF
+FFFFFFFFFFFF
+[...]
+# show write
+> show
+4 FFFEBBCCAABBCC112233445566AA1124
+```
+
+```
+write card
+```
+
+### clone a card.
+
+NOTE: Clonning a card is not possible yet because some considerations in trailer blocks.
+You need to know trailer blocks (at the moment of this document)
+
+Steps:
+load keys to read origin card (default keys are ffffffffffff) and read card to internal buffer.
+This reads the entire card except trailer blocks.
+```
+lka 0 ffffffffffff
+lka 1 ffffffffffff
+[...]
+read card
+```
+
+Then load to internal buffer destination card keys A
+```
+lka 0 ffffffffffff
+lka 1 ffffffffffff
+[...]
+
+```
+Load to internal buffer trailer blocks (optional)
+```
+lb 3 ffffffffffffFF078069FFFFFFFFFFFF
+lb 7 ffffffffffffFF078069FFFFFFFFFFFF
+lb 11 ffffffffffffFF078069FFFFFFFFFFFF
+lb 15 ffffffffffffFF078069FFFFFFFFFFFF
+[...]
+```
+
+```
+write zero
+write trailer
+write card
+```

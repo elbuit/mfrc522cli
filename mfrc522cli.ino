@@ -97,7 +97,7 @@ SimpleCLI serial_command(COMMAND_QUEUE_SIZE, ERROR_QUEUE_SIZE);
 Command cmdHelp;
 Command cmdLoadBlock;
 Command cmdLoadKeyA;
-Command cmdWrite2Card;
+Command cmdWrite;
 Command cmdRead;
 Command cmdFixCard;
 Command cmdShow;
@@ -121,11 +121,7 @@ void setup()
   // Init RFID
   SPI.begin();        // Init SPI bus
   mfrc522.PCD_Init(); // Init MFRC522
-  /*   ShowReaderDetails();
-
-  Serial.println(F("This code scan the MIFARE Classsic NUID."));
-  Serial.print(F("Using the following key:"));
-  printHex(key.keyByte, MFRC522::MF_KEY_SIZE); */
+  ShowReaderDetails();
 }
 
 void loop()
@@ -154,15 +150,8 @@ void loop()
   }
   else if (toWriteCard)
   {
-    Serial.print(F("Writing card"));
-
     writeCard();
     toWriteCard = false;
-  }
-  else if (toWriteBlockZero)
-  {
-    writeBlockZero();
-    toWriteBlockZero = false;
   }
 }
 
@@ -280,7 +269,6 @@ void authenticateBlock(int block)
   if (status != MFRC522::STATUS_OK)
   {
     Serial.println(block);
-
     printERROR();
     mfrc522.PICC_HaltA(); // Stop reading
   }
@@ -294,9 +282,9 @@ void readCard()
   for (int block = 0; block < 64; block++)
 
   {
-    if (block % 4 == 3)
+    if ((block % 4) == 3 )
     {
-      continue; //trailer blocks
+      continue;
     }
     authenticateBlock(block);
 
@@ -315,11 +303,20 @@ void readCard()
     }
     else
     {
+
       // Serial.println(F("Success with key:"));
       for (int p = 0; p < 16; p++)
       {
         data[block][p] = buffer[p];
         write_block[block] = true;
+      }
+      if (block % 4 == 3)
+      {
+        int sector = (block / 4);
+        for (int j = 0; j < 6; j++)
+        {
+          data[block][j] = keys[sector][j]; //trailer blocks load key A
+        };
       }
     }
   }
@@ -332,11 +329,6 @@ void writeCard()
 {
   Serial.println(F("Write CARD:"));
 
-  if (toWriteBlockZero && write_block[0] == true)
-  {
-    writeBlockZero();
-    write_block[0] = false;
-  }
   for (int block = 1; block < 64; block++)
   {
     if (write_block[block] == false)
@@ -353,12 +345,19 @@ void writeCard()
     status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(block, data[block], 16);
     if (status != MFRC522::STATUS_OK)
     {
+      Serial.println(mfrc522.GetStatusCodeName(status));
       printERROR();
-      // Serial.println(mfrc522.GetStatusCodeName(status));
       mfrc522.PICC_HaltA(); // Halt PICC
       mfrc522.PCD_StopCrypto1();
       return;
     }
+  }
+  if (toWriteBlockZero && write_block[0] == true)
+  {
+    authenticateBlock(block);
+    delay(10);
+    writeBlockZero();
+    write_block[0] = false;
   }
   printOK();
   mfrc522.PICC_HaltA(); // Halt PICC
@@ -392,13 +391,6 @@ void writeBlockZero()
   {
     printERROR();
   }
-
-  // Wake the card up again
-  /*   byte atqa_answer[2];
-  byte atqa_size = 2;
-
-  mfrc522.PICC_WakeupA(atqa_answer, &atqa_size); */
-  authenticateBlock(0);
 }
 
 // data conversion functions
@@ -491,8 +483,8 @@ void SetupCommands()
   //cmdLoadKeyA.setDescription("load a write key -b of sector -k");
   cmdLoadKeyA.addPosArg("b");
   cmdLoadKeyA.addPosArg("k");
-  cmdWrite2Card = serial_command.addCommand("write");
-  cmdWrite2Card.addPosArg("");
+  cmdWrite = serial_command.addCommand("write");
+  cmdWrite.addPosArg("");
   cmdRead = serial_command.addCommand("read");
   cmdRead.addPosArg("", "uid");
   cmdFixCard = serial_command.addCommand("fix");
@@ -518,7 +510,6 @@ void SerialCommands()
     Command c = serial_command.getCmd();
     Serial.print("> ");
     Serial.print(c.getName());
-  
 
     Serial.println();
     //Get 2 arguments
@@ -600,16 +591,20 @@ void SerialCommands()
         toReadUID = true;
       }
     }
-    else if (c == cmdWrite2Card)
+    else if (c == cmdWrite)
     {
-      toWriteCard = true;
+
       if (arg1.getValue() == "zero")
       {
         toWriteBlockZero = true;
       }
-      if (arg1.getValue() == "trailer")
+      else if (arg1.getValue() == "trailer")
       {
         toWriteSectorTrailer = true;
+      }
+      else if (arg1.getValue() == "card")
+      {
+        toWriteCard = true;
       }
     }
     else
