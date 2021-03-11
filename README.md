@@ -3,7 +3,7 @@ A generic serial cli interface for writing mifare classic cards using an ESP8266
 ![](mfrc522_cli_bb.png)
 ## This is a cli serial interface for mfrc522
   It allows to copy, modify or clone cards using a serial interface commands.
-  It also allows to write block zero 
+  It also allows to write block zero or fix a magic card
    
 Commands: read, write, lka, show, lb, clean, fix
   
@@ -35,22 +35,23 @@ example:
 ```
   reads a entire card and store data to write buffer except trailer sectors blocks
 
- ### command: write (zero) (trailer) (card)
+ ### command: write (zero) (trailer) (card) (clone)
 writes data buffer to the card. To see what data is going to be written "show write"
 
-write card: write data from internal buffer to card. By default this doesn't copy trailer blocks to destination card.
+write card: write data from internal buffer to card. By default this doesn't copy trailer blocks or block zero to destination card.
 
 write zero: enables writing the zero block in magic cards.
 
 write trailer: Enable writing trailer blocks.
 
+write clone: is the same than zero + trailer + card
 
 DANGEROUS: When you write a trailer block you are writing a new Key A and Key B and permissions
 
-### command: show [write] [keys] [uid]
+### command: show [data] [keys] [uid]
 description: show 
 
-parameter: write - show blocks to write (all blocks if 
+parameter: data - show blocks to write (all blocks if 
 read command or several if lb command)
 
 parameter: keys  - show loaded keys for read or write commands
@@ -58,7 +59,7 @@ parameter: keys  - show loaded keys for read or write commands
 parameter: uid   - show uid card (needed to aproach it to the reader)
 example:
 ```
-    show write
+    show data
     show uid
     show keys
 ```
@@ -70,21 +71,30 @@ example:
     clear keys  -  clear all loaded keys to FFFFFFFFFFFF
 ```
 
-### Command: fix start stop
+### Command: fix (start) (card)  (stop)
 
 description: This command allows to fix a unresponsive magic card.
+
+Also can overwrite a trailer block of each sector in magic cards and recover them with key A and key B set to FFFFFFFFFFF
 
 This not work with common cards only with magic cards.
 Usage:
 ```
   fix start
 ```
+
+(optional) to overwrite trailer sectors to default:
+```
+fix trailer
+```
+
 then approach the card to reader
 ```
   fix stop
 ```
 if fix doesn't work,this stops trying to fix a card.
 
+fix card == fix zero + fix trailer
 
 ## Examples:
 
@@ -101,7 +111,7 @@ FFFFFFFFFFFF
 7D8037235CFF
 FFFFFFFFFFFF
 [...]
-# show write
+# show data
 > show
 4 FFFEBBCCAABBCC112233445566AA1124
 ```
@@ -112,8 +122,9 @@ write card
 
 ### clone a card.
 
-NOTE: Clonning a card is not possible yet because some considerations in trailer blocks.
-You need to know trailer blocks (at the moment of this document)
+WARNING: Clonning a card is dangerous, you'll  overwrite trailer blocks and depending of the access bits you can brick the card.
+
+If you card is a magic card probably you will be able to fix it with <fix trailer> command.
 
 Steps:
 load keys to read origin card (default keys are ffffffffffff) and read card to internal buffer.
@@ -124,6 +135,10 @@ lka 1 ffffffffffff
 [...]
 read card
 ```
+Now your card data is in internal buffer, you can see it with:
+```
+show data
+```
 
 Then load to internal buffer destination card keys A
 ```
@@ -132,17 +147,14 @@ lka 1 ffffffffffff
 [...]
 
 ```
-Load to internal buffer trailer blocks (optional)
+or 
 ```
-lb 3 ffffffffffffFF078069FFFFFFFFFFFF
-lb 7 ffffffffffffFF078069FFFFFFFFFFFF
-lb 11 ffffffffffffFF078069FFFFFFFFFFFF
-lb 15 ffffffffffffFF078069FFFFFFFFFFFF
-[...]
+clear keys 
+```
+if all your destination keys are FFFFFFFFFFFF
+
+And write block zero + trailer + data = clone
+```
+write clone
 ```
 
-```
-write zero
-write trailer
-write card
-```

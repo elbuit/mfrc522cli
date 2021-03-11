@@ -52,15 +52,18 @@ void authenticateBlock(int block); // Authenticate to block using key A
 uint8_t readCardUID(); // get card UID
 uint8_t isCardPresent();
 void stopReader();
+void readCard();
 void writeCard();
 void writeBlockZero();
-void readCard();
+void writeRawBlock(int block);
 void writeBlock();
+void fixTrailerBlocks();
+void clearReadBlocks();
+void clearBlocks2Write();
+void clearAllVariables();
+void clearKeys();
+void showDataBuffer();
 void showKeys();
-void initReadBlocks();
-void initWriteBlocks();
-void initKeys();
-void showWrite();
 void printOK();
 void printERROR();
 int ahex2int(char a, char b); // return a int from 2 char hex ie: FF = 255
@@ -108,9 +111,9 @@ void setup()
   Serial.begin(9600);
   Serial.println("");
   // Initialize variables
-  initReadBlocks();
-  initWriteBlocks();
-  initKeys();
+  clearReadBlocks();
+  clearBlocks2Write();
+  clearKeys();
 
   // CLI
   SetupCommands();
@@ -133,8 +136,12 @@ void loop()
     {
       if (mfrc522.MIFARE_UnbrickUidSector(false))
       {
+        if (toWriteSectorTrailer)
+        {
+          fixTrailerBlocks();
+        }
         printOK();
-        toFixCard = false;
+        clearAllVariables();
       }
     }
   } while (!isCardPresent());
@@ -282,10 +289,8 @@ void readCard()
   for (int block = 0; block < 64; block++)
 
   {
-    if ((block % 4) == 3 )
-    {
-      continue;
-    }
+    //if ((block % 4) == 3) { continue; }
+
     authenticateBlock(block);
 
     // Read block
@@ -335,13 +340,12 @@ void writeCard()
     {
       continue;
     }
-    if ((block % 4) == 3 and toWriteSectorTrailer == false)
+    if ((block % 4) == 3 && toWriteSectorTrailer == false)
     {
       continue;
     }
 
     authenticateBlock(block);
-    delay(10);
     status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(block, data[block], 16);
     if (status != MFRC522::STATUS_OK)
     {
@@ -352,10 +356,10 @@ void writeCard()
       return;
     }
   }
+
   if (toWriteBlockZero && write_block[0] == true)
   {
-    authenticateBlock(block);
-    delay(10);
+    // delay(10);
     writeBlockZero();
     write_block[0] = false;
   }
@@ -364,32 +368,54 @@ void writeCard()
   mfrc522.PCD_StopCrypto1();
 }
 
-void writeBlockZero()
-// TODO
+void writeRawBlock(int block)
 {
-  Serial.println(F("Write BlockZero:"));
-  bool logErrors = true;
-  authenticateBlock(block);
-
   byte block0_buffer[18];
-  mfrc522.PCD_StopCrypto1();
-  if (!mfrc522.MIFARE_OpenUidBackdoor(logErrors))
-  {
-    if (logErrors)
-    {
-      printERROR();
-    }
-  }
   for (uint8_t i = 0; i < 16; i++)
   {
-    block0_buffer[i] = data[0][i];
+    block0_buffer[i] = data[block][i];
   }
-
-  // Write modified block 0 back to card
-  status = (MFRC522::StatusCode)mfrc522.MIFARE_Write((byte)0, block0_buffer, (byte)16);
+  status = (MFRC522::StatusCode)mfrc522.MIFARE_Write((byte)block, block0_buffer, (byte)16);
   if (status != MFRC522::STATUS_OK)
   {
     printERROR();
+  }
+}
+
+void writeBlockZero()
+// TODO
+{
+  mfrc522.PCD_StopCrypto1();
+  if (!mfrc522.MIFARE_OpenUidBackdoor(true))
+  {
+    printERROR();
+  }
+  writeRawBlock(0);
+}
+
+void fixTrailerBlocks()
+{
+
+  byte trailer[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x07, 0x80, 0x69, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  clearBlocks2Write();
+  mfrc522.PCD_StopCrypto1();
+  if (!mfrc522.MIFARE_OpenUidBackdoor(true))
+  {
+    printERROR();
+  }
+
+  for (int block = 1; block < 64; block++)
+  {
+    if ((block % 4) != 3)
+    {
+      continue;
+    }
+    for (uint8_t i = 0; i < 16; i++)
+    {
+      data[block][i] = trailer[i];
+    }
+    write_block[block] = true;
+    writeRawBlock(block);
   }
 }
 
@@ -415,7 +441,7 @@ void printERROR()
 }
 
 // Print functions
-void showWrite()
+void showDataBuffer()
 {
   for (int block_number = 0; block_number < 64; block_number++)
   {
@@ -540,44 +566,30 @@ void SerialCommands()
     }
     else if (c == cmdShow)
     {
-      if (arg1.getValue() == "write")
+      if (arg1.getValue() == "data")
       {
-        showWrite();
+        showDataBuffer();
       }
       else if (arg1.getValue() == "keys")
       {
         showKeys();
       }
     }
-    else if (c == cmdFixCard)
-
-    {
-      if (arg1.getValue() == "start")
-      {
-        toFixCard = true;
-      }
-      else if (arg1.getValue() == "stop")
-      {
-        toFixCard = false;
-      }
-    }
-
     else if (c == cmdClear)
 
     {
 
       if (arg1.getValue() == "keys")
       {
-        initKeys();
+        clearKeys();
       }
       else if (arg1.getValue() == "data")
       {
-        initWriteBlocks();
+        clearBlocks2Write();
       }
       else if (arg1.getValue() == "all")
       {
-        initKeys();
-        initWriteBlocks();
+        clearAllVariables();
       }
     }
     else if (c == cmdRead)
@@ -606,6 +618,28 @@ void SerialCommands()
       {
         toWriteCard = true;
       }
+      else if (arg1.getValue() == "clone")
+      {
+        toWriteCard = true;
+        toWriteSectorTrailer = true;
+        toWriteBlockZero = true;
+      }
+    }
+    else if (c == cmdFixCard)
+    {
+      if (arg1.getValue() == "start")
+      {
+        clearAllVariables();
+        toFixCard = true;
+      }
+      else if (arg1.getValue() == "stop")
+      {
+        clearAllVariables();
+      }
+      else if (arg1.getValue() == "trailer")
+      {
+        toWriteSectorTrailer = true;
+      }
     }
     else
     {
@@ -627,7 +661,7 @@ void SerialCommands()
     } */
 }
 
-void initWriteBlocks()
+void clearBlocks2Write()
 {
   for (int block = 0; block < 64; block++)
   {
@@ -635,14 +669,14 @@ void initWriteBlocks()
   }
 }
 
-void initReadBlocks()
+void clearReadBlocks()
 {
   for (int block = 0; block < 64; block++)
   {
     read_block[block] = false;
   }
 }
-void initKeys()
+void clearKeys()
 {
   for (int sector = 0; sector < 16; sector++)
   {
@@ -651,4 +685,15 @@ void initKeys()
       keys[sector][field] = 0xFF;
     }
   }
+}
+void clearAllVariables()
+{
+  toReadUID = false;
+  toWriteCard = false;
+  toReadCard = false;
+  toFixCard = false;
+  toWriteBlockZero = false;
+  toWriteSectorTrailer = false;
+  clearKeys();
+  clearBlocks2Write();
 }
