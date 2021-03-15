@@ -5,19 +5,15 @@
  */
 
 /*
-  * This is a cli serial interface for mfrc522
+  * This is a generic cli serial interface for mfrc522
   * It allows to copy, modify or clone cards using a serial interface commands.
-  * It also allows to write block zero 
+  * It also allows to write block zero or fix magic cards.
  */
 
 // Inlcude Library
 // MFRC522
 #include <SPI.h>
 #include <MFRC522.h>
-
-//duemilanove
-// #define SS_PIN 10
-// #define RST_PIN 9
 
 /*
  wemos d1 mini
@@ -30,14 +26,9 @@ SDA  - D8
 #define SS_PIN D8
 #define RST_PIN D4
 
-// SimpleCLI
 #include <SimpleCLI.h>
 #define COMMAND_QUEUE_SIZE 1
 #define ERROR_QUEUE_SIZE 1
-// DEBUG
-//#include <MemoryFree.h>
-
-// functions
 
 void printHex(byte *buffer, byte bufferSize);
 void printDec(byte *buffer, byte bufferSize);
@@ -76,6 +67,7 @@ bool toReadCard = false;
 bool toFixCard = false;
 bool toWriteBlockZero = false;     // to write the block zero can be dangerous and can brick your card
 bool toWriteSectorTrailer = false; // to write a sector trailer can be dangerous and can brick your card
+bool serialEcho = true;
 
 byte block;
 byte data[64][16]; // data to write to the card
@@ -105,15 +97,15 @@ Command cmdRead;
 Command cmdFixCard;
 Command cmdShow;
 Command cmdClear;
+Command cmdSet;
 
 void setup()
 {
   Serial.begin(9600);
   Serial.println("");
   // Initialize variables
-  clearReadBlocks();
-  clearBlocks2Write();
-  clearKeys();
+
+  clearAllVariables();
 
   // CLI
   SetupCommands();
@@ -271,7 +263,6 @@ void authenticateBlock(int block)
   {
     key.keyByte[j] = keys[sector][j];
   }
-  // delay(5);
   status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, block, &key, &(mfrc522.uid));
   if (status != MFRC522::STATUS_OK)
   {
@@ -359,7 +350,6 @@ void writeCard()
 
   if (toWriteBlockZero && write_block[0] == true)
   {
-    // delay(10);
     writeBlockZero();
     write_block[0] = false;
   }
@@ -443,16 +433,20 @@ void printERROR()
 // Print functions
 void showDataBuffer()
 {
+  byte total_blocks = 0;
   for (int block_number = 0; block_number < 64; block_number++)
   {
     if (write_block[block_number] == true)
     {
+      total_blocks++;
       Serial.print(block_number);
       Serial.print(" ");
       printHex(data[block_number], 16);
     }
     delay(10); // Issues with Serial.print
   }
+  Serial.print("total blocks to write ");
+  Serial.println(total_blocks);
 }
 
 void showKeys()
@@ -507,14 +501,17 @@ void SetupCommands()
   // Load key A
   cmdLoadKeyA = serial_command.addCommand("lka");
   //cmdLoadKeyA.setDescription("load a write key -b of sector -k");
-  cmdLoadKeyA.addPosArg("b");
-  cmdLoadKeyA.addPosArg("k");
+  cmdLoadKeyA.addPosArg("sector"); //sector
+  cmdLoadKeyA.addPosArg("key");    //key
   cmdWrite = serial_command.addCommand("write");
   cmdWrite.addPosArg("");
   cmdRead = serial_command.addCommand("read");
   cmdRead.addPosArg("", "uid");
   cmdFixCard = serial_command.addCommand("fix");
   cmdFixCard.addPosArg("", "card");
+  cmdSet = serial_command.addCommand("set");
+  cmdSet.addPosArg("", "echo");
+  cmdSet.addPosArg("");
 }
 void SerialCommands()
 {
@@ -525,8 +522,11 @@ void SerialCommands()
 
     if (input.length() > 0)
     {
-      Serial.print("# ");
-      Serial.println(input);
+      if (serialEcho)
+      {
+        Serial.print("# ");
+        Serial.println(input);
+      }
       serial_command.parse(input);
     }
   }
@@ -534,10 +534,12 @@ void SerialCommands()
   if (serial_command.available())
   {
     Command c = serial_command.getCmd();
-    Serial.print("> ");
-    Serial.print(c.getName());
-
-    Serial.println();
+    if (serialEcho)
+    {
+      Serial.print("> ");
+      Serial.print(c.getName());
+      Serial.println();
+    }
     //Get 2 arguments
     Argument arg1 = c.getArgument(0);
     Argument arg2 = c.getArgument(1);
@@ -641,13 +643,26 @@ void SerialCommands()
         toWriteSectorTrailer = true;
       }
     }
-    else
+    else if (c == cmdSet)
     {
-      Serial.println("ERROR: Command not defined");
+      if (arg1.getValue() == "echo")
+      {
+        if (arg2.getValue() == "on")
+        {
+          serialEcho = true;
+        }
+        else if (arg2.getValue() == "off")
+        {
+          serialEcho = false;
+        }
+      }
+      else
+      {
+        Serial.println("ERROR: Command not defined");
+      }
     }
-  }
 
-  /*    if (serial_command.errored()) {
+    /*    if (serial_command.errored()) {
         CommandError cmdError = serial_command.getError();
 
         Serial.print("ERROR: ");
@@ -659,8 +674,8 @@ void SerialCommands()
             Serial.println("\"?");
         }
     } */
+  }
 }
-
 void clearBlocks2Write()
 {
   for (int block = 0; block < 64; block++)
@@ -694,6 +709,7 @@ void clearAllVariables()
   toFixCard = false;
   toWriteBlockZero = false;
   toWriteSectorTrailer = false;
-  clearKeys();
+  clearReadBlocks();
   clearBlocks2Write();
+  clearKeys();
 }

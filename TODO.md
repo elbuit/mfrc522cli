@@ -1,0 +1,4 @@
+- Add a python cli manager to load keys and data.
+- Add checks to the functions to test if the action was done correctly.
+- Add key B support.
+- refactor, refactor and refactor

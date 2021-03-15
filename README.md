@@ -5,7 +5,7 @@ A generic serial cli interface for writing mifare classic cards using an ESP8266
   It allows to copy, modify or clone cards using a serial interface commands.
   It also allows to write block zero or fix a magic card
    
-Commands: read, write, lka, show, lb, clean, fix
+Commands: read, write, lka, show, lb, clean, fix, set
   
   ### command: lka (sector) (key)
 description: load key A for a sector. This key will be used in read or write card commands.
@@ -71,6 +71,14 @@ example:
     clear keys  -  clear all loaded keys to FFFFFFFFFFFF
 ```
 
+### Command: set echo off / on (default on)
+description set global variables
+
+```
+set echo off
+```
+disables serial command echo. This allows to read values faster and without serial buffer errors.
+
 ### Command: fix (start) (card)  (stop)
 
 description: This command allows to fix a unresponsive magic card.
@@ -122,7 +130,7 @@ write card
 
 ### clone a card.
 
-WARNING: Clonning a card is dangerous, you'll  overwrite trailer blocks and depending of the access bits you can brick the card.
+WARNING: Clonning a card is dangerous, you'll  overwrite trailer blocks and depending of the access bits you can brick the card or block acces to a sector.
 
 If you card is a magic card probably you will be able to fix it with <fix trailer> command.
 
