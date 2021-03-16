@@ -243,9 +243,8 @@ uint8_t readCardUID()
   for (uint8_t i = 0; i < 4; i++)
   { //
     cardUID[i] = mfrc522.uid.uidByte[i];
-    //Serial.print(cardUID[i], HEX);
   }
-  printHex(cardUID,4);
+  printHex(cardUID, 4);
   Serial.println();
   Serial.print(F("PICC type: "));
   MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
@@ -440,11 +439,13 @@ void showDataBuffer()
     if (write_block[block_number] == true)
     {
       total_blocks++;
+      Serial.print("lb ");
+
       Serial.print(block_number);
       Serial.print(" ");
       printHex(data[block_number], 16);
+      delay(5); // issues with serial port
     }
-    delay(10); // Issues with Serial.print
   }
   Serial.print("total blocks to write ");
   Serial.println(total_blocks);
@@ -541,6 +542,7 @@ void SerialCommands()
       Serial.print(c.getName());
       Serial.println();
     }
+
     //Get 2 arguments
     Argument arg1 = c.getArgument(0);
     Argument arg2 = c.getArgument(1);
